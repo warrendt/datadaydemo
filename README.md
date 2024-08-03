@@ -1,6 +1,12 @@
 # datadaydemo
 Data and AI Community Day Demo - Automating Lab Environments
 
+This repo comes as is, some changes have been made before the live demonstration at the event.
+Copilot helped a lot in the making of this repo. 
+Use common sense and your god given gift of thought when deploying and using this repo. Edit as you need. 
+
+
+SESSION BRIEF
 
 EFFICIENT LAB MANAGEMENT WITH INFRASTRUCTURE AS CODE ON AZURE
 
