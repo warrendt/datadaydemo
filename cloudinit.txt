@@ -1,0 +1,6 @@
+# cloudinit.txt file content to install SQL Data Studio
+# This is an example, you may need to adjust the script according to your needs
+cloud-config
+ runcmd:
+  - powershell.exe -Command "Invoke-WebRequest -Uri https://aka.ms/sqlops-windows -OutFile C:\\Users\\adminuser\\Downloads\\SQLDataStudio.exe"
+  - powershell.exe -Command "Start-Process -FilePath C:\\Users\\adminuser\\Downloads\\SQLDataStudio.exe -ArgumentList '/quiet' -Wait"
