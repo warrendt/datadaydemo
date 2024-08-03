@@ -1,0 +1,93 @@
+trigger:
+- main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  ARM_CLIENT_ID: $(servicePrincipalId)
+  ARM_CLIENT_SECRET: $(servicePrincipalKey)
+  ARM_SUBSCRIPTION_ID: $(subscriptionId)
+  ARM_TENANT_ID: $(tenantId)
+  RESOURCE_GROUP: "waza-data-day-rg"
+  STORAGE_ACCOUNT: "wazadatadaysa"
+  CONTAINER_NAME: "db-backups"
+  SQL_SERVER: "waza-data-day-sqlserver"
+  SQL_DATABASE: "waza-data-day-db"
+  ADMIN_USER: "sqladmin"
+  ADMIN_PASSWORD: "H@Sh1CoR3!"
+  ADVENTUREWORKS_URL: "https://github.com/Microsoft/sql-server-samples/releases/download/adventureworks/AdventureWorks2022.bak" # URL to the AdventureWorks database backup
+  ADVENTUREWORKS_BACPAC: "AdventureWorks2022.bacpac"
+
+stages:
+- stage: DeployInfrastructure
+  jobs:
+  - job: TerraformDeployment
+    steps:
+    - checkout: self
+
+    - task: ms-devlabs.custom-terraform-tasks.custom-terraform-installer-task.TerraformInstaller@1
+      inputs:
+        terraformVersion: 'latest'
+
+    - task: PowerShell@2
+      inputs:
+        targetType: 'inline'
+        script: |
+          terraform init
+          terraform apply -auto-approve -input=false
+      env:
+        ARM_CLIENT_ID: $(ARM_CLIENT_ID)
+        ARM_CLIENT_SECRET: $(ARM_CLIENT_SECRET)
+        ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
+        ARM_TENANT_ID: $(ARM_TENANT_ID)
+        TF_VAR_client_id: $(ARM_CLIENT_ID)
+        TF_VAR_client_secret: $(ARM_CLIENT_SECRET)
+        TF_VAR_subscription_id: $(ARM_SUBSCRIPTION_ID)
+        TF_VAR_tenant_id: $(ARM_TENANT_ID)
+      name: terraformApply
+
+    - task: PowerShell@2
+      inputs:
+        targetType: 'inline'
+        script: |
+          terraform output -json > tf_outputs.json
+          $publicIp = (Get-Content -Raw -Path tf_outputs.json | ConvertFrom-Json).public_ip.value
+          Write-Host "##vso[task.setvariable variable=public_ip]$publicIp"
+      name: terraformOutput
+
+- stage: SetupDatabase
+  dependsOn: DeployInfrastructure
+  jobs:
+  - job: DatabaseSetup
+    steps:
+    - checkout: self
+
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: 'waza-subscription'
+        scriptType: 'bash'
+        scriptLocation: 'scriptPath'
+        scriptPath: 'upload_data.sh'  # Adjust the path as needed
+        arguments: |
+          -e CONTAINER_NAME=$(CONTAINER_NAME)
+          -e STORAGE_ACCOUNT=$(STORAGE_ACCOUNT)
+          -e RESOURCE_GROUP=$(RESOURCE_GROUP)
+          -e ADVENTUREWORKS_URL=$(ADVENTUREWORKS_URL)
+          -e ADVENTUREWORKS_BACPAC=$(ADVENTUREWORKS_BACPAC)
+          
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: 'waza-subscription'
+        scriptType: 'bash'
+        scriptLocation: 'scriptPath'
+        scriptPath: 'import_bacpac.sh'  # Adjust the path as needed
+        arguments: |
+          -e SQL_SERVER=$(SQL_SERVER)
+          -e SQL_DATABASE=$(SQL_DATABASE)
+          -e RESOURCE_GROUP=$(RESOURCE_GROUP)
+          -e ADMIN_USER=$(ADMIN_USER)
+          -e ADMIN_PASSWORD=$(ADMIN_PASSWORD)
+          -e STORAGE_ACCOUNT=$(STORAGE_ACCOUNT)
+          -e CONTAINER_NAME=$(CONTAINER_NAME)
+          -e ADVENTUREWORKS_BACPAC=$(ADVENTUREWORKS_BACPAC)
